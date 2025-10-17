@@ -18,17 +18,21 @@ import {
 export const dynamic = "force-dynamic";
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [showRecommendationModal, setShowRecommendationModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [periodFilter, setPeriodFilter] = useState<
     "today" | "week" | "month" | "all"
   >("all");
   const [darkMode, setDarkMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const router = useRouter();
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export default function DashboardPage() {
     if (savedDarkMode) {
       document.documentElement.classList.add("dark");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleDarkMode = () => {
@@ -68,7 +73,7 @@ export default function DashboardPage() {
       return;
     }
 
-    setUser(session.user);
+    setUser({ id: session.user.id, email: session.user.email });
   };
 
   const fetchTransactions = async () => {
@@ -79,19 +84,29 @@ export default function DashboardPage() {
 
       if (!session) return;
 
+      // Hanya ambil transaksi dalam 1 tahun terakhir
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
       const { data, error } = await supabase
         .from("transactions")
         .select("*")
         .eq("user_id", session.user.id)
+        .gte("transaction_date", oneYearAgo.toISOString().split("T")[0])
         .order("transaction_date", { ascending: false })
-        .limit(50);
+        .limit(1000);
 
       if (error) throw error;
 
       setTransactions(data || []);
 
-      // Calculate balance
-      const total = (data || []).reduce((acc, t) => {
+      // Calculate total balance (all time - tidak di-reset)
+      const { data: allData } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", session.user.id);
+
+      const total = (allData || []).reduce((acc, t) => {
         return t.type === "income"
           ? acc + Number(t.amount)
           : acc - Number(t.amount);
@@ -144,7 +159,7 @@ export default function DashboardPage() {
     setDeleteConfirm(null);
   };
 
-  // Filter transactions based on period
+  // Filter transactions based on period, month, year, and search
   const getFilteredTransactions = () => {
     const now = new Date();
     const today = startOfDay(now);
@@ -152,30 +167,73 @@ export default function DashboardPage() {
     return transactions.filter((t) => {
       const transactionDate = new Date(t.transaction_date);
 
+      // Filter berdasarkan periode
+      let passedPeriodFilter = true;
       switch (periodFilter) {
         case "today":
-          return transactionDate >= today;
+          passedPeriodFilter = transactionDate >= today;
+          break;
         case "week":
           const weekAgo = startOfDay(subDays(now, 7));
-          return transactionDate >= weekAgo;
+          passedPeriodFilter = transactionDate >= weekAgo;
+          break;
         case "month":
           const monthAgo = startOfDay(subDays(now, 30));
-          return transactionDate >= monthAgo;
+          passedPeriodFilter = transactionDate >= monthAgo;
+          break;
         case "all":
         default:
-          return true;
+          passedPeriodFilter = true;
       }
+
+      // Filter berdasarkan bulan dan tahun yang dipilih
+      let passedMonthYearFilter = true;
+      if (selectedMonth && selectedYear) {
+        const transMonth = transactionDate.getMonth();
+        const transYear = transactionDate.getFullYear();
+        passedMonthYearFilter =
+          transMonth === parseInt(selectedMonth) &&
+          transYear === parseInt(selectedYear);
+      } else if (selectedMonth) {
+        passedMonthYearFilter =
+          transactionDate.getMonth() === parseInt(selectedMonth);
+      } else if (selectedYear) {
+        passedMonthYearFilter =
+          transactionDate.getFullYear() === parseInt(selectedYear);
+      }
+
+      // Filter berdasarkan search query
+      let passedSearchFilter = true;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesDescription = (t.description || "")
+          .toLowerCase()
+          .includes(query);
+        const matchesCategory = t.category.toLowerCase().includes(query);
+        const matchesType = t.type.toLowerCase().includes(query);
+        const matchesAmount = t.amount.toString().includes(query);
+
+        passedSearchFilter =
+          matchesDescription || matchesCategory || matchesType || matchesAmount;
+      }
+
+      return passedPeriodFilter && passedMonthYearFilter && passedSearchFilter;
     });
   };
 
   const filteredTransactions = getFilteredTransactions();
 
+  // Calculate total income and expense for filtered period
+  const filteredIncome = filteredTransactions
+    .filter((t) => t.type === "income")
+    .reduce((acc, t) => acc + Number(t.amount), 0);
+
+  const filteredExpense = filteredTransactions
+    .filter((t) => t.type === "expense")
+    .reduce((acc, t) => acc + Number(t.amount), 0);
+
   // Calculate balance for filtered transactions
-  const filteredBalance = filteredTransactions.reduce((acc, t) => {
-    return t.type === "income"
-      ? acc + Number(t.amount)
-      : acc - Number(t.amount);
-  }, 0);
+  const filteredBalance = filteredIncome - filteredExpense;
 
   // Calculate expense distribution for filtered period
   const getChartData = () => {
@@ -200,6 +258,42 @@ export default function DashboardPage() {
 
   // Get period label in Indonesian
   const getPeriodLabel = () => {
+    if (selectedMonth && selectedYear) {
+      const monthNames = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+      return `${monthNames[parseInt(selectedMonth)]} ${selectedYear}`;
+    } else if (selectedMonth) {
+      const monthNames = [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+      ];
+      return monthNames[parseInt(selectedMonth)];
+    } else if (selectedYear) {
+      return `Tahun ${selectedYear}`;
+    }
+
     switch (periodFilter) {
       case "today":
         return "Hari Ini";
@@ -212,6 +306,40 @@ export default function DashboardPage() {
         return "Semua";
     }
   };
+
+  // Get available months and years from transactions
+  const getAvailableMonthsYears = () => {
+    const months = new Set<number>();
+    const years = new Set<number>();
+
+    transactions.forEach((t) => {
+      const date = new Date(t.transaction_date);
+      months.add(date.getMonth());
+      years.add(date.getFullYear());
+    });
+
+    return {
+      months: Array.from(months).sort((a, b) => a - b),
+      years: Array.from(years).sort((a, b) => b - a),
+    };
+  };
+
+  const { years: availableYears } = getAvailableMonthsYears();
+
+  const monthNames = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
 
   if (loading) {
     return (
@@ -316,9 +444,15 @@ export default function DashboardPage() {
             ).map((period) => (
               <button
                 key={period.value}
-                onClick={() => setPeriodFilter(period.value)}
+                onClick={() => {
+                  setPeriodFilter(period.value);
+                  setSelectedMonth("");
+                  setSelectedYear("");
+                }}
                 className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                  periodFilter === period.value
+                  periodFilter === period.value &&
+                  !selectedMonth &&
+                  !selectedYear
                     ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30 scale-105"
                     : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 hover:scale-105"
                 }`}
@@ -327,6 +461,109 @@ export default function DashboardPage() {
                 {period.label}
               </button>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Month/Year Filter and Search */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="mb-6 space-y-4"
+        >
+          {/* Search Box */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-slate-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Cari transaksi, kategori, atau jumlah..."
+              className="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Month and Year Selectors */}
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setPeriodFilter("all");
+              }}
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition-all"
+            >
+              <option value="">Semua Bulan</option>
+              {monthNames.map((month, index) => (
+                <option key={index} value={index}>
+                  {month}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedYear}
+              onChange={(e) => {
+                setSelectedYear(e.target.value);
+                setPeriodFilter("all");
+              }}
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium transition-all"
+            >
+              <option value="">Semua Tahun</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+
+            {(selectedMonth || selectedYear || searchQuery) && (
+              <button
+                onClick={() => {
+                  setSelectedMonth("");
+                  setSelectedYear("");
+                  setSearchQuery("");
+                  setPeriodFilter("all");
+                }}
+                className="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition-all"
+              >
+                Reset Filter
+              </button>
+            )}
           </div>
         </motion.div>
 
@@ -344,29 +581,79 @@ export default function DashboardPage() {
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
               <p className="text-blue-100 text-sm font-medium">
-                💰 Saldo {periodFilter === "all" ? "Total" : getPeriodLabel()}
+                💰 Saldo Total (Tidak Di-reset)
               </p>
-              {periodFilter !== "all" && (
-                <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                  Filter Aktif
-                </span>
-              )}
             </div>
             <h2 className="text-3xl md:text-5xl font-bold mb-2">
               Rp{" "}
-              {(periodFilter === "all"
-                ? balance
-                : filteredBalance
-              ).toLocaleString("id-ID", {
+              {balance.toLocaleString("id-ID", {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
               })}
             </h2>
-            {periodFilter !== "all" && (
-              <p className="text-blue-200 text-xs md:text-sm">
-                Total Keseluruhan: Rp {balance.toLocaleString("id-ID")}
-              </p>
-            )}
+            <p className="text-blue-200 text-xs md:text-sm">
+              Saldo ini mencakup semua transaksi sepanjang waktu
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Income and Expense Summary Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
+        >
+          {/* Total Income */}
+          <div className="bg-gradient-to-br from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700 rounded-2xl p-5 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-2xl">💵</span>
+              <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                {getPeriodLabel()}
+              </span>
+            </div>
+            <p className="text-green-100 text-xs font-medium mb-1">
+              Total Pemasukan
+            </p>
+            <p className="text-2xl md:text-3xl font-bold">
+              Rp {filteredIncome.toLocaleString("id-ID")}
+            </p>
+          </div>
+
+          {/* Total Expense */}
+          <div className="bg-gradient-to-br from-red-500 to-rose-600 dark:from-red-600 dark:to-rose-700 rounded-2xl p-5 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-2xl">💸</span>
+              <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                {getPeriodLabel()}
+              </span>
+            </div>
+            <p className="text-red-100 text-xs font-medium mb-1">
+              Total Pengeluaran
+            </p>
+            <p className="text-2xl md:text-3xl font-bold">
+              Rp {filteredExpense.toLocaleString("id-ID")}
+            </p>
+          </div>
+
+          {/* Period Balance */}
+          <div className="bg-gradient-to-br from-purple-500 to-violet-600 dark:from-purple-600 dark:to-violet-700 rounded-2xl p-5 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-2xl">📊</span>
+              <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                {getPeriodLabel()}
+              </span>
+            </div>
+            <p className="text-purple-100 text-xs font-medium mb-1">
+              Saldo Periode
+            </p>
+            <p
+              className={`text-2xl md:text-3xl font-bold ${
+                filteredBalance >= 0 ? "" : "text-yellow-200"
+              }`}
+            >
+              Rp {filteredBalance.toLocaleString("id-ID")}
+            </p>
           </div>
         </motion.div>
 
@@ -423,25 +710,34 @@ export default function DashboardPage() {
           transition={{ delay: 0.4 }}
           className="bg-white dark:bg-slate-800 rounded-3xl p-5 md:p-6 shadow-xl border border-slate-100 dark:border-slate-700 mb-20"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">📝</span>
-            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">
-              Transaksi {getPeriodLabel()}
-            </h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📝</span>
+              <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">
+                Transaksi {getPeriodLabel()}
+              </h3>
+            </div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {filteredTransactions.length} transaksi
+            </div>
           </div>
           <div className="space-y-2">
             {filteredTransactions.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">💸</div>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">
-                  Belum ada transaksi untuk periode ini
+                  {searchQuery
+                    ? `Tidak ada transaksi yang cocok dengan "${searchQuery}"`
+                    : "Belum ada transaksi untuk periode ini"}
                 </p>
                 <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
-                  Klik tombol + untuk menambahkan
+                  {searchQuery
+                    ? "Coba kata kunci lain"
+                    : "Klik tombol + untuk menambahkan"}
                 </p>
               </div>
             ) : (
-              filteredTransactions.slice(0, 20).map((transaction) => (
+              filteredTransactions.slice(0, 50).map((transaction) => (
                 <motion.div
                   key={transaction.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -458,12 +754,26 @@ export default function DashboardPage() {
                       <p className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
                         {transaction.description || transaction.category}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {format(
-                          new Date(transaction.transaction_date),
-                          "dd MMM yyyy"
-                        )}
-                      </p>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span>
+                          {format(
+                            new Date(transaction.transaction_date),
+                            "dd MMM yyyy"
+                          )}
+                        </span>
+                        <span>•</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full ${
+                            transaction.type === "income"
+                              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                              : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                          }`}
+                        >
+                          {transaction.type === "income"
+                            ? "Pemasukan"
+                            : "Pengeluaran"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2 flex-shrink-0">
@@ -518,6 +828,12 @@ export default function DashboardPage() {
                 setShowChatModal(false);
                 fetchTransactions();
               }}
+            />
+          )}
+          {showRecommendationModal && user && (
+            <RecommendationModal
+              userId={user.id}
+              onClose={() => setShowRecommendationModal(false)}
             />
           )}
           {deleteConfirm && (
@@ -584,6 +900,20 @@ export default function DashboardPage() {
           transition={{ delay: 0.5 }}
           className="fixed bottom-4 right-4 md:bottom-6 md:right-6 flex flex-row md:flex-col gap-2 z-40"
         >
+          {/* Recommendation AI Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowRecommendationModal(true)}
+            className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-full shadow-lg hover:shadow-2xl flex items-center justify-center group relative transition-all"
+            title="Rekomendasi AI"
+          >
+            <span className="text-xl md:text-2xl">💡</span>
+            <span className="hidden md:block absolute right-16 bg-slate-900 dark:bg-slate-700 text-white text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              Rekomendasi AI
+            </span>
+          </motion.button>
+
           {/* Chat AI Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -630,6 +960,7 @@ export default function DashboardPage() {
   );
 }
 
-// Import modal components (we'll create these next)
+// Import modal components
 import ManualTransactionModal from "@/components/ManualTransactionModal";
 import ChatModal from "@/components/ChatModal";
+import RecommendationModal from "@/components/RecommendationModal";

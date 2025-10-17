@@ -42,6 +42,49 @@ const schema = {
   required: ["amount", "type", "category", "description"],
 };
 
+const multiSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    transactions: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          amount: {
+            type: SchemaType.NUMBER,
+            description: "The numeric value of the transaction.",
+          },
+          type: {
+            type: SchemaType.STRING,
+            enum: ["income", "expense"],
+            description: "Whether this is income or expense",
+          },
+          category: {
+            type: SchemaType.STRING,
+            enum: [
+              "Food",
+              "Transport",
+              "Bills",
+              "Salary",
+              "Shopping",
+              "Entertainment",
+              "Transfer",
+              "Other",
+            ],
+            description: "The category of the transaction",
+          },
+          description: {
+            type: SchemaType.STRING,
+            description: "A concise summary of the transaction.",
+          },
+        },
+        required: ["amount", "type", "category", "description"],
+      },
+    },
+  },
+  required: ["transactions"],
+};
+
 export const model = genAI.getGenerativeModel({
   model: "gemini-2.0-flash-exp",
   generationConfig: {
@@ -77,12 +120,100 @@ Contoh:
 - "Nonton bioskop 50000" → expense, Entertainment, 50000, "Nonton bioskop"`,
 });
 
+export const multiModel = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash-exp",
+  generationConfig: {
+    responseMimeType: "application/json",
+    responseSchema: multiSchema,
+  },
+  systemInstruction: `Anda adalah asisten keuangan AI yang profesional. Tugas Anda adalah mengkonversi input bahasa natural pengguna yang berisi MULTIPLE/BANYAK transaksi menjadi array of transactions dalam format JSON.
+
+Aturan:
+1. Deteksi SEMUA transaksi yang disebutkan dalam input
+2. Untuk setiap transaksi, tentukan: amount, type (income/expense), category, description
+3. Ekstrak jumlah nominal (konversi: k=1000, juta=1000000, rb/ribu=1000)
+4. Pilih kategori yang paling sesuai dari daftar yang tersedia
+5. Respons HANYA dalam format JSON array, tanpa teks tambahan
+
+Kategori yang tersedia:
+- Food (Makanan & Minuman)
+- Transport (Transportasi)
+- Bills (Tagihan & Utilitas)
+- Salary (Gaji & Penghasilan)
+- Shopping (Belanja)
+- Entertainment (Hiburan)
+- Transfer (Transfer Uang)
+- Other (Lainnya)
+
+Contoh Input Multi-Transaksi:
+"Tadi bayar makan 50rb, terus isi bensin 100rb, sama beli pulsa 25rb"
+→ 3 transaksi: Food (50000), Transport (100000), Bills (25000)
+
+"Hari ini belanja groceries 200 ribu dan bayar netflix 50 ribu"
+→ 2 transaksi: Food (200000), Entertainment (50000)`,
+});
+
 export type ParsedTransaction = {
   amount: number;
   type: "income" | "expense";
   category: string;
   description: string;
 };
+
+export type MultiParsedTransactions = {
+  transactions: ParsedTransaction[];
+};
+
+// Fungsi untuk mendeteksi apakah input mengandung multiple transactions
+export function detectMultipleTransactions(text: string): boolean {
+  const lowerText = text.toLowerCase();
+
+  // Kata-kata yang mengindikasikan multiple transactions
+  const multiIndicators = [
+    " dan ",
+    " sama ",
+    " terus ",
+    " lalu ",
+    " kemudian ",
+    " juga ",
+    " plus ",
+    ", ",
+    " serta ",
+  ];
+
+  // Kata-kata transaksi
+  const transactionWords = [
+    "bayar",
+    "beli",
+    "buat",
+    "kasih",
+    "transfer",
+    "isi",
+    "kirim",
+    "terima",
+    "dapat",
+    "jual",
+    "gaji",
+    "bonus",
+    "makan",
+    "belanja",
+  ];
+
+  // Hitung berapa kali kata transaksi muncul
+  let transactionCount = 0;
+  transactionWords.forEach((word) => {
+    const regex = new RegExp(`\\b${word}`, "gi");
+    const matches = lowerText.match(regex);
+    if (matches) transactionCount += matches.length;
+  });
+
+  // Cek apakah ada indikator multiple dan lebih dari 1 transaksi
+  const hasMultiIndicator = multiIndicators.some((indicator) =>
+    lowerText.includes(indicator)
+  );
+
+  return hasMultiIndicator && transactionCount >= 2;
+}
 
 // Fungsi untuk mendeteksi chat casual (bukan transaksi)
 export function detectCasualChat(text: string): string | null {
@@ -172,6 +303,24 @@ export async function parseTransactionText(
     console.error("Error parsing transaction:", error);
     throw new Error(
       "Failed to parse transaction. Please try rephrasing or use the manual form."
+    );
+  }
+}
+
+export async function parseMultipleTransactions(
+  text: string
+): Promise<MultiParsedTransactions> {
+  try {
+    const result = await multiModel.generateContent(text);
+    const response = result.response;
+    const jsonText = response.text();
+    const parsed = JSON.parse(jsonText);
+
+    return parsed as MultiParsedTransactions;
+  } catch (error) {
+    console.error("Error parsing multiple transactions:", error);
+    throw new Error(
+      "Failed to parse multiple transactions. Please try rephrasing or use the manual form."
     );
   }
 }

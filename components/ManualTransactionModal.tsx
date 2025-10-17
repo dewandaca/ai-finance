@@ -18,12 +18,39 @@ export default function ManualTransactionModal({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Calculate min and max date (1 year ago to today)
+  const getMinDate = () => {
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return oneYearAgo.toISOString().split("T")[0];
+  };
+
+  const getMaxDate = () => {
+    return new Date().toISOString().split("T")[0];
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
+      // Validate date is within 1 year
+      const selectedDate = new Date(date);
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const today = new Date();
+
+      if (selectedDate < oneYearAgo) {
+        throw new Error(
+          "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+        );
+      }
+
+      if (selectedDate > today) {
+        throw new Error("Tanggal transaksi tidak boleh di masa depan");
+      }
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -201,9 +228,14 @@ export default function ManualTransactionModal({ onClose }: Props) {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={getMinDate()}
+                max={getMaxDate()}
                 required
                 className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                ⚠️ Hanya bisa mencatat transaksi dalam 1 tahun terakhir
+              </p>
             </div>
 
             {/* Description */}

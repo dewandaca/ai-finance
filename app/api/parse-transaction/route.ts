@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseTransactionText, detectCasualChat } from "@/lib/gemini";
+import {
+  parseTransactionText,
+  detectCasualChat,
+  detectMultipleTransactions,
+  parseMultipleTransactions,
+} from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +26,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const parsed = await parseTransactionText(text);
+    // Cek apakah ini multiple transactions
+    const isMultiple = detectMultipleTransactions(text);
 
-    return NextResponse.json(parsed);
+    if (isMultiple) {
+      // Parse multiple transactions
+      const multiParsed = await parseMultipleTransactions(text);
+      return NextResponse.json({
+        isMultiple: true,
+        transactions: multiParsed.transactions,
+      });
+    } else {
+      // Parse single transaction
+      const parsed = await parseTransactionText(text);
+      return NextResponse.json(parsed);
+    }
   } catch (error) {
     console.error("Error in parse-transaction API:", error);
     const errorMessage =

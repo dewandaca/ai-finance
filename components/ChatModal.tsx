@@ -10,7 +10,7 @@ interface Props {
 
 type Message = {
   id: string;
-  role: "user" | "assistant" | "confirmation";
+  role: "user" | "assistant" | "confirmation" | "multi-confirmation";
   content: string;
   parsedData?: {
     amount: number;
@@ -18,6 +18,12 @@ type Message = {
     category: string;
     description: string;
   };
+  multiParsedData?: Array<{
+    amount: number;
+    type: "income" | "expense";
+    category: string;
+    description: string;
+  }>;
   answered?: boolean; // Track if confirmation has been answered
 };
 
@@ -81,7 +87,47 @@ export default function ChatModal({ onClose }: Props) {
         return;
       }
 
-      // Add confirmation message
+      // Cek apakah ini multiple transactions
+      if (
+        data.isMultiple &&
+        data.transactions &&
+        data.transactions.length > 0
+      ) {
+        let confirmContent = `Saya mendeteksi ${data.transactions.length} transaksi:\n\n`;
+        data.transactions.forEach(
+          (
+            txn: {
+              amount: number;
+              type: "income" | "expense";
+              category: string;
+              description: string;
+            },
+            index: number
+          ) => {
+            confirmContent += `${index + 1}. ${
+              txn.type === "income" ? "💰" : "💸"
+            } ${
+              txn.type === "income" ? "Pemasukan" : "Pengeluaran"
+            } Rp ${txn.amount.toLocaleString("id-ID")} - ${txn.category} (${
+              txn.description
+            })\n`;
+          }
+        );
+        confirmContent += `\nApakah semua transaksi ini sudah benar?`;
+
+        const multiConfirmMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "multi-confirmation",
+          content: confirmContent,
+          multiParsedData: data.transactions,
+        };
+
+        setMessages((prev) => [...prev, multiConfirmMessage]);
+        setLoading(false);
+        return;
+      }
+
+      // Add confirmation message for single transaction
       const confirmMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "confirmation",
@@ -173,6 +219,84 @@ export default function ChatModal({ onClose }: Props) {
     setMessages((prev) => [...prev, rejectMessage]);
   };
 
+  const handleAcceptAll = async (messageId: string) => {
+    const message = messages.find((m) => m.id === messageId);
+    if (
+      !message?.multiParsedData ||
+      message.answered ||
+      message.multiParsedData.length === 0
+    )
+      return;
+
+    // Mark message as answered immediately
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, answered: true } : m))
+    );
+
+    setLoading(true);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("Not authenticated");
+      }
+
+      // Validasi tanggal untuk semua transaksi
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const today = new Date();
+      const transactionDate = new Date().toISOString().split("T")[0];
+      const selectedDate = new Date(transactionDate);
+
+      if (selectedDate < oneYearAgo) {
+        throw new Error(
+          "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+        );
+      }
+
+      if (selectedDate > today) {
+        throw new Error("Tanggal transaksi tidak boleh di masa depan");
+      }
+
+      // Insert all transactions
+      const transactionsToInsert = message.multiParsedData.map((txn) => ({
+        user_id: session.user.id,
+        amount: txn.amount,
+        type: txn.type,
+        category: txn.category,
+        description: txn.description,
+        transaction_date: transactionDate,
+      }));
+
+      const { error } = await supabase
+        .from("transactions")
+        .insert(transactionsToInsert);
+
+      if (error) throw error;
+
+      const successMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `✅ Berhasil mencatat ${message.multiParsedData.length} transaksi! Ada yang lain?`,
+      };
+
+      setMessages((prev) => [...prev, successMessage]);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `❌ Gagal menyimpan transaksi: ${errorMsg}`,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <motion.div
@@ -236,7 +360,8 @@ export default function ChatModal({ onClose }: Props) {
                   className={`max-w-[85%] rounded-2xl px-3 py-2 ${
                     message.role === "user"
                       ? "bg-blue-600 text-white"
-                      : message.role === "confirmation"
+                      : message.role === "confirmation" ||
+                        message.role === "multi-confirmation"
                       ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 border-2 border-yellow-400 dark:border-yellow-600"
                       : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                   }`}
@@ -245,6 +370,7 @@ export default function ChatModal({ onClose }: Props) {
                     {message.content}
                   </p>
 
+                  {/* Single Transaction Confirmation */}
                   {message.role === "confirmation" &&
                     message.parsedData &&
                     !message.answered && (
@@ -262,6 +388,28 @@ export default function ChatModal({ onClose }: Props) {
                           className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-medium py-2 px-3 rounded-lg transition"
                         >
                           ✗ Salah
+                        </button>
+                      </div>
+                    )}
+
+                  {/* Multiple Transactions Confirmation */}
+                  {message.role === "multi-confirmation" &&
+                    message.multiParsedData &&
+                    !message.answered && (
+                      <div className="mt-2 flex space-x-2">
+                        <button
+                          onClick={() => handleAcceptAll(message.id)}
+                          disabled={loading}
+                          className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium py-2 px-3 rounded-lg transition"
+                        >
+                          ✓ Accept All ({message.multiParsedData.length})
+                        </button>
+                        <button
+                          onClick={() => handleReject(message.id)}
+                          disabled={loading}
+                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-medium py-2 px-3 rounded-lg transition"
+                        >
+                          ✗ Reject All
                         </button>
                       </div>
                     )}
