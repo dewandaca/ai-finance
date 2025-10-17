@@ -69,6 +69,18 @@ export default function ChatModal({ onClose }: Props) {
         throw new Error(data.error || "Failed to parse transaction");
       }
 
+      // Cek apakah ini casual chat
+      if (data.isCasualChat) {
+        const casualMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.message,
+        };
+        setMessages((prev) => [...prev, casualMessage]);
+        setLoading(false);
+        return;
+      }
+
       // Add confirmation message
       const confirmMessage: Message = {
         id: (Date.now() + 1).toString(),

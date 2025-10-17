@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseTransactionText } from "@/lib/gemini";
+import { parseTransactionText, detectCasualChat } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +9,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Invalid input: text is required" },
         { status: 400 }
+      );
+    }
+
+    // Cek apakah ini casual chat (bukan transaksi)
+    const casualResponse = detectCasualChat(text);
+    if (casualResponse) {
+      return NextResponse.json(
+        { isCasualChat: true, message: casualResponse },
+        { status: 200 }
       );
     }
 

@@ -84,6 +84,80 @@ export type ParsedTransaction = {
   description: string;
 };
 
+// Fungsi untuk mendeteksi chat casual (bukan transaksi)
+export function detectCasualChat(text: string): string | null {
+  const lowerText = text.toLowerCase().trim();
+
+  // Deteksi sapaan
+  const greetings = ["halo", "hai", "hello", "hi", "hei", "hey"];
+  if (greetings.some((g) => lowerText === g || lowerText.startsWith(g + " "))) {
+    const responses = [
+      "Hai juga! Ada transaksi yang mau dicatat? 😊",
+      "Halo! Mau cerita soal transaksi apa hari ini?",
+      "Hai! Yuk ceritain pengeluaran atau pemasukan kamu",
+      "Hei! Siap bantu catat keuangan kamu nih 💰",
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // Deteksi kabar
+  const kabarPatterns = [
+    "apa kabar",
+    "apakabar",
+    "how are you",
+    "kabar",
+    "gimana kabar",
+  ];
+  if (kabarPatterns.some((p) => lowerText.includes(p))) {
+    const responses = [
+      "Baik dong! Kamu gimana? Ada transaksi yang perlu dicatat? 😄",
+      "Alhamdulillah baik! Yuk cerita soal keuangan kamu hari ini",
+      "Baik-baik aja! Nah sekarang kita fokus ke keuangan kamu yuk",
+      "Good! Btw ada pengeluaran atau pemasukan yang mau dicatat?",
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // Deteksi terima kasih
+  const thanksPatterns = [
+    "terima kasih",
+    "terimakasih",
+    "makasih",
+    "thanks",
+    "thank you",
+    "thx",
+  ];
+  if (thanksPatterns.some((p) => lowerText.includes(p))) {
+    const responses = [
+      "Sama-sama! Senang bisa bantu 😊",
+      "Sip! Kapan-kapan catat transaksi lagi ya",
+      "No problem! Ada lagi yang mau dicatat?",
+      "Oke! Nanti kalau ada transaksi lagi langsung chat aja ya",
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // Deteksi penutupan/pamit
+  const goodbyePatterns = [
+    "bye",
+    "dadah",
+    "sampai jumpa",
+    "see you",
+    "selamat tinggal",
+  ];
+  if (goodbyePatterns.some((p) => lowerText.includes(p))) {
+    const responses = [
+      "Oke sampai jumpa! Jaga keuangan ya 👋",
+      "Bye! Semangat atur keuangannya",
+      "See you! Jangan lupa catat transaksi terus ya",
+      "Dadah! Nanti balik lagi kalau ada transaksi baru",
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  return null;
+}
+
 export async function parseTransactionText(
   text: string
 ): Promise<ParsedTransaction> {
