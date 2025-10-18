@@ -16,18 +16,10 @@ const supabaseServiceKey =
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, minTransactions = 3 } = await req.json();
+    const { userId } = await req.json();
 
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
-    }
-
-    // Validate minTransactions
-    if (minTransactions < 3) {
-      return NextResponse.json(
-        { error: "Minimal 3 transaksi diperlukan untuk analisis yang akurat" },
-        { status: 400 }
-      );
     }
 
     // PENTING: Gunakan service role key untuk bypass RLS
@@ -41,44 +33,32 @@ export async function POST(req: NextRequest) {
 
     console.log("=== DEBUGGING INFO ===");
     console.log("User ID:", userId);
-    console.log("Min Transactions:", minTransactions);
     console.log("Supabase URL:", supabaseUrl);
     console.log(
       "Using Service Key:",
       supabaseServiceKey.substring(0, 20) + "..."
     );
 
-    // Ambil semua transaksi user terlebih dahulu (untuk cek)
-    const { data: allTransactions, error: allError } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("user_id", userId);
-
-    console.log("Total transactions for user:", allTransactions?.length || 0);
-
-    if (allError) {
-      console.error("Error fetching all transactions:", allError);
-    }
-
-    if (allTransactions && allTransactions.length > 0) {
-      console.log("Sample transaction:", allTransactions[0]);
-      console.log(
-        "Date range:",
-        allTransactions[allTransactions.length - 1]?.transaction_date,
-        "to",
-        allTransactions[0]?.transaction_date
-      );
-    }
-
-    // Ambil transaksi user sesuai dengan jumlah yang diminta
+    // Ambil SEMUA transaksi user (tidak pakai limit)
     const { data: transactions, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("user_id", userId)
-      .order("transaction_date", { ascending: false })
-      .limit(minTransactions);
+      .order("transaction_date", { ascending: false });
 
-    console.log("Filtered transactions:", transactions?.length || 0);
+    console.log("Total transactions for user:", transactions?.length || 0);
+    console.log("Total transactions for user:", transactions?.length || 0);
+
+    if (transactions && transactions.length > 0) {
+      console.log("Sample transaction:", transactions[0]);
+      console.log(
+        "Date range:",
+        transactions[transactions.length - 1]?.transaction_date,
+        "to",
+        transactions[0]?.transaction_date
+      );
+    }
+
     console.log("=== END DEBUG ===");
 
     if (error) {
@@ -101,9 +81,9 @@ export async function POST(req: NextRequest) {
           recommendation:
             "# 📊 Rekomendasi Pengelolaan Keuangan\n\n## ❌ Data Tidak Mencukupi\n\nAnda hanya memiliki **" +
             (transactions?.length || 0) +
-            ' transaksi**, sedangkan minimal **3 transaksi** diperlukan untuk memberikan rekomendasi yang akurat dan bermakna.\n\n### 💡 Mengapa Minimal 3 Transaksi?\n\n1. **Pola Keuangan** - Kita perlu melihat pola pengeluaran dan pemasukan Anda\n2. **Analisis Akurat** - Data yang lebih banyak menghasilkan rekomendasi yang lebih tepat\n3. **Kategori Beragam** - Agar bisa melihat distribusi pengeluaran Anda\n\n### 🚀 Cara Menambah Transaksi:\n\n1. **Gunakan Chat AI** 💬\n   - Ceritakan transaksi dengan bahasa natural\n   - Contoh: "Bayar makan 50 ribu" atau "Terima gaji 5 juta"\n\n2. **Input Manual** ✏️\n   - Klik tombol "+" di dashboard\n   - Isi form transaksi dengan lengkap\n\n### � Tips Umum Pengelolaan Keuangan:\n\n1. **Mulai Mencatat Transaksi**\n   - Catat semua pemasukan dan pengeluaran secara konsisten\n   - Jangan lewatkan transaksi sekecil apapun\n\n2. **Buat Anggaran**\n   - Gunakan aturan 50/30/20 (50% kebutuhan, 30% keinginan, 20% tabungan)\n   - Sesuaikan dengan kondisi keuangan Anda\n\n3. **Prioritaskan Tabungan**\n   - Sisihkan minimal 10-20% dari pendapatan\n   - Bangun dana darurat 3-6 bulan pengeluaran\n\n4. **Kurangi Pengeluaran yang Tidak Perlu**\n   - Review langganan bulanan\n   - Masak di rumah lebih sering\n\n5. **Investasi untuk Masa Depan**\n   - Mulai belajar tentang investasi\n   - Mulai dari yang kecil dan aman\n\n**Tambahkan minimal ' +
+            ' transaksi**, sedangkan minimal **3 transaksi** diperlukan untuk memberikan rekomendasi yang akurat dan bermakna.\n\n### 💡 Mengapa Minimal 3 Transaksi?\n\n1. **Pola Keuangan** - Kita perlu melihat pola pengeluaran dan pemasukan Anda\n2. **Analisis Akurat** - Data yang lebih banyak menghasilkan rekomendasi yang lebih tepat\n3. **Kategori Beragam** - Agar bisa melihat distribusi pengeluaran Anda\n\n### 🚀 Cara Menambah Transaksi:\n\n1. **Gunakan Chat AI** 💬\n   - Ceritakan transaksi dengan bahasa natural\n   - Contoh: "Bayar makan 50 ribu" atau "Terima gaji 5 juta"\n\n2. **Input Manual** ✏️\n   - Klik tombol "+" di dashboard\n   - Isi form transaksi dengan lengkap\n\n### 💰 Tips Umum Pengelolaan Keuangan:\n\n1. **Mulai Mencatat Transaksi**\n   - Catat semua pemasukan dan pengeluaran secara konsisten\n   - Jangan lewatkan transaksi sekecil apapun\n\n2. **Buat Anggaran**\n   - Gunakan aturan 50/30/20 (50% kebutuhan, 30% keinginan, 20% tabungan)\n   - Sesuaikan dengan kondisi keuangan Anda\n\n3. **Prioritaskan Tabungan**\n   - Sisihkan minimal 10-20% dari pendapatan\n   - Bangun dana darurat 3-6 bulan pengeluaran\n\n4. **Kurangi Pengeluaran yang Tidak Perlu**\n   - Review langganan bulanan\n   - Masak di rumah lebih sering\n\n5. **Investasi untuk Masa Depan**\n   - Mulai belajar tentang investasi\n   - Mulai dari yang kecil dan aman\n\n**Tambahkan minimal ' +
             (3 - (transactions?.length || 0)) +
-            " transaksi lagi**, lalu coba analisis ulang untuk mendapatkan rekomendasi yang personal! �",
+            " transaksi lagi**, lalu coba analisis ulang untuk mendapatkan rekomendasi yang personal! 🎯",
         },
         { status: 200 }
       );

@@ -163,23 +163,28 @@ export default function DashboardPage() {
   const getFilteredTransactions = () => {
     const now = new Date();
     const today = startOfDay(now);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
     return transactions.filter((t) => {
       const transactionDate = new Date(t.transaction_date);
+      const transactionStartOfDay = startOfDay(transactionDate);
 
       // Filter berdasarkan periode
       let passedPeriodFilter = true;
       switch (periodFilter) {
         case "today":
-          passedPeriodFilter = transactionDate >= today;
+          // Cek apakah tanggal transaksi sama dengan hari ini
+          passedPeriodFilter =
+            transactionStartOfDay.getTime() === today.getTime();
           break;
         case "week":
           const weekAgo = startOfDay(subDays(now, 7));
-          passedPeriodFilter = transactionDate >= weekAgo;
+          passedPeriodFilter = transactionStartOfDay >= weekAgo;
           break;
         case "month":
           const monthAgo = startOfDay(subDays(now, 30));
-          passedPeriodFilter = transactionDate >= monthAgo;
+          passedPeriodFilter = transactionStartOfDay >= monthAgo;
           break;
         case "all":
         default:

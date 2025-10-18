@@ -21,12 +21,10 @@ export default function RecommendationModal({ onClose, userId }: Props) {
       id: "1",
       role: "assistant",
       content:
-        "Halo! Saya akan menganalisis transaksi keuangan Anda dan memberikan rekomendasi yang personal. Pilih berapa banyak transaksi yang ingin dianalisis (minimal 3 transaksi):",
+        "Halo! Saya akan menganalisis SEMUA transaksi keuangan Anda dan memberikan rekomendasi yang personal. Klik tombol di bawah untuk memulai analisis! 🚀",
     },
   ]);
   const [loading, setLoading] = useState(false);
-  const [manualCount, setManualCount] = useState<string>("3");
-  const [showManualInput, setShowManualInput] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -37,33 +35,21 @@ export default function RecommendationModal({ onClose, userId }: Props) {
     scrollToBottom();
   }, [messages]);
 
-  const handleGetRecommendation = async (minTransactions: number) => {
-    if (minTransactions < 3) {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content:
-          "Minimal 3 transaksi diperlukan untuk memberikan rekomendasi yang akurat dan bermakna. Silakan tambahkan lebih banyak transaksi terlebih dahulu, lalu coba lagi!",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      return;
-    }
-
+  const handleGetRecommendation = async () => {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: "Analisis " + minTransactions + " transaksi terakhir saya",
+      content: "Analisis semua transaksi saya",
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
-    setShowManualInput(false);
 
     try {
       const response = await fetch("/api/get-recommendations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, minTransactions }),
+        body: JSON.stringify({ userId }),
       });
 
       const data = await response.json();
@@ -91,21 +77,6 @@ export default function RecommendationModal({ onClose, userId }: Props) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleManualSubmit = () => {
-    const count = parseInt(manualCount);
-    if (isNaN(count) || count < 3) {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content:
-          "Jumlah transaksi minimal adalah 3. Silakan masukkan angka yang valid!",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      return;
-    }
-    handleGetRecommendation(count);
   };
 
   const hasRecommendation = messages.some((m) => m.role === "recommendation");
@@ -184,7 +155,7 @@ export default function RecommendationModal({ onClose, userId }: Props) {
                         Salin
                       </button>
                       <button
-                        onClick={() => setShowManualInput(true)}
+                        onClick={handleGetRecommendation}
                         className="flex-1 px-3 py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-white text-xs font-medium rounded-lg transition"
                       >
                         Analisis Ulang
@@ -236,59 +207,12 @@ export default function RecommendationModal({ onClose, userId }: Props) {
         </div>
         {!hasRecommendation && !loading && (
           <div className="p-3 border-t border-slate-200 dark:border-slate-700 shrink-0">
-            {showManualInput ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={manualCount}
-                    onChange={(e) => setManualCount(e.target.value)}
-                    onKeyPress={(e) =>
-                      e.key === "Enter" && handleManualSubmit()
-                    }
-                    min="3"
-                    placeholder="Jumlah transaksi (min: 3)"
-                    className="flex-1 px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  />
-                  <button
-                    onClick={handleManualSubmit}
-                    disabled={loading}
-                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition"
-                  >
-                    Analisis
-                  </button>
-                </div>
-                <button
-                  onClick={() => setShowManualInput(false)}
-                  className="w-full px-3 py-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
-                >
-                  Kembali ke opsi cepat
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
-                  Pilih jumlah transaksi:
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[5, 10, 20].map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => handleGetRecommendation(count)}
-                      className="px-3 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-all shadow-md hover:shadow-lg"
-                    >
-                      {count} data
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setShowManualInput(true)}
-                  className="w-full px-3 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-sm font-medium rounded-lg transition"
-                >
-                  Input Manual
-                </button>
-              </div>
-            )}
+            <button
+              onClick={handleGetRecommendation}
+              className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium rounded-xl transition-all shadow-md hover:shadow-lg"
+            >
+              🚀 Mulai Analisis Semua Transaksi
+            </button>
           </div>
         )}
       </motion.div>
