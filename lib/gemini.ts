@@ -292,6 +292,7 @@ export function detectCasualChat(text: string): string | null {
     "thanks",
     "thank you",
     "thx",
+    "mksh"
   ];
   if (thanksPatterns.some((p) => lowerText.includes(p))) {
     const responses = [
@@ -310,6 +311,10 @@ export function detectCasualChat(text: string): string | null {
     "sampai jumpa",
     "see you",
     "selamat tinggal",
+    "sampai nanti",
+    "sampai jumpa lagi",
+    "bye bye",
+    "babay",
   ];
   if (goodbyePatterns.some((p) => lowerText.includes(p))) {
     const responses = [
@@ -336,6 +341,18 @@ export function detectCasualChat(text: string): string | null {
     "untuk apa ini",
     "app ini ngapain",
     "web ini buat apa",
+    "web ini buat ngapain",
+    "web ini untuk apa",
+    "gmna sih cara",
+    "gimana sih cara",
+    "bagaimana cara",
+    "cara kerja",
+    "gmna caranya",
+    "gimana caranya",
+    "gmna cara",
+    "gimana cara",
+
+    
   ];
   if (aboutAppPatterns.some((p) => lowerText.includes(p))) {
     const responses = [
