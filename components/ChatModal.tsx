@@ -17,12 +17,16 @@ type Message = {
     type: "income" | "expense";
     category: string;
     description: string;
+    daysAgo?: number;
+    specificDate?: number;
   };
   multiParsedData?: Array<{
     amount: number;
     type: "income" | "expense";
     category: string;
     description: string;
+    daysAgo?: number;
+    specificDate?: number;
   }>;
   answered?: boolean; // Track if confirmation has been answered
 };
@@ -33,7 +37,7 @@ export default function ChatModal({ onClose }: Props) {
       id: "1",
       role: "assistant",
       content:
-        "Halo! Saya asisten keuangan AI Anda. Ceritakan transaksi Anda dengan bahasa natural, misalnya 'Bayar makan 50 ribu' atau 'Terima gaji 5 juta'. Saya akan membantu mencatatnya! 💰",
+        "Halo! Saya asisten keuangan AI Anda. Ceritakan transaksi Anda dengan bahasa natural, misalnya 'Tanggal 15 bayar makan 50 ribu', 'Kemarin terima gaji 5 juta', atau 'Tadi isi bensin 100rb'. Saya akan membantu mencatatnya! 💰",
     },
   ]);
   const [input, setInput] = useState("");
@@ -101,16 +105,35 @@ export default function ChatModal({ onClose }: Props) {
               type: "income" | "expense";
               category: string;
               description: string;
+              daysAgo?: number;
+              specificDate?: number;
             },
             index: number
           ) => {
+            let timeInfo = "";
+
+            if (txn.specificDate) {
+              timeInfo = `tanggal ${txn.specificDate}`;
+            } else {
+              const daysAgo = txn.daysAgo || 0;
+              if (daysAgo === 0) {
+                timeInfo = "hari ini";
+              } else if (daysAgo === 1) {
+                timeInfo = "kemarin";
+              } else if (daysAgo === 7) {
+                timeInfo = "seminggu lalu";
+              } else {
+                timeInfo = `${daysAgo} hari lalu`;
+              }
+            }
+
             confirmContent += `${index + 1}. ${
               txn.type === "income" ? "💰" : "💸"
             } ${
               txn.type === "income" ? "Pemasukan" : "Pengeluaran"
             } Rp ${txn.amount.toLocaleString("id-ID")} - ${txn.category} (${
               txn.description
-            })\n`;
+            }) - ${timeInfo}\n`;
           }
         );
         confirmContent += `\nApakah semua transaksi ini sudah benar?`;
@@ -128,6 +151,25 @@ export default function ChatModal({ onClose }: Props) {
       }
 
       // Add confirmation message for single transaction
+      const daysAgo = data.daysAgo;
+      const specificDate = data.specificDate;
+      let timeInfo = "";
+
+      if (specificDate) {
+        timeInfo = `tanggal ${specificDate}`;
+      } else {
+        const days = daysAgo || 0;
+        if (days === 0) {
+          timeInfo = "hari ini";
+        } else if (days === 1) {
+          timeInfo = "kemarin";
+        } else if (days === 7) {
+          timeInfo = "seminggu lalu";
+        } else {
+          timeInfo = `${days} hari lalu`;
+        }
+      }
+
       const confirmMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "confirmation",
@@ -135,17 +177,26 @@ export default function ChatModal({ onClose }: Props) {
           data.type === "income" ? "Pemasukan" : "Pengeluaran"
         } sebesar Rp ${data.amount.toLocaleString("id-ID")} untuk kategori ${
           data.category
-        }. Deskripsi: "${data.description}". Apakah ini sudah benar?`,
+        } (${timeInfo}). Deskripsi: "${
+          data.description
+        }". Apakah ini sudah benar?`,
         parsedData: data,
       };
 
       setMessages((prev) => [...prev, confirmMessage]);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const errorResponses = [
+        `Waduh, ada yang salah nih. ${errorMsg}. Coba kasih tau lagi tapi dengan cara yang beda? Contoh: "Bayar makan 50 ribu kemarin" 😅`,
+        `Hmm, sepertinya aku kesulitan memproses itu. ${errorMsg}. Bisa diulang dengan kalimat yang lebih simple? Misal: "Terima gaji 3 juta" 🤔`,
+        `Oops, ada error: ${errorMsg}. Mungkin bisa coba pakai format lain? Kayak: "2 hari lalu beli pulsa 25rb" 💭`,
+        `Maaf nih, aku agak bingung. ${errorMsg}. Yuk coba lagi dengan kalimat yang lebih jelas, contoh: "Tadi bayar parkir 5rb" 🙏`,
+      ];
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `Maaf, saya tidak bisa memahami itu. ${errorMsg}. Bisakah Anda coba pakai kalimat lain? Contoh: "Bayar makan 50 ribu" atau "Terima gaji 3 juta"`,
+        content:
+          errorResponses[Math.floor(Math.random() * errorResponses.length)],
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -173,13 +224,76 @@ export default function ChatModal({ onClose }: Props) {
         throw new Error("Not authenticated");
       }
 
+      // Hitung tanggal transaksi berdasarkan daysAgo atau specificDate
+      const daysAgo = message.parsedData.daysAgo;
+      const specificDate = message.parsedData.specificDate;
+
+      // Gunakan helper function untuk calculate date
+      let formattedDate: string;
+      const today = new Date();
+
+      if (specificDate) {
+        // Jika specificDate disebutkan - PERBAIKAN TIMEZONE ISSUE
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); // 0-indexed
+        const currentDay = today.getDate();
+
+        let targetMonth = currentMonth;
+        let targetYear = currentYear;
+
+        // Jika tanggal lebih besar dari hari ini, asumsikan bulan lalu
+        if (specificDate > currentDay) {
+          targetMonth = currentMonth - 1;
+          if (targetMonth < 0) {
+            targetMonth = 11;
+            targetYear = currentYear - 1;
+          }
+        }
+
+        // PERBAIKAN: Format langsung tanpa Date object untuk menghindari timezone
+        const monthStr = String(targetMonth + 1).padStart(2, "0"); // +1 karena 0-indexed
+        const dateStr = String(specificDate).padStart(2, "0");
+        formattedDate = `${targetYear}-${monthStr}-${dateStr}`;
+
+        // Validasi tanggal - gunakan Date untuk validasi
+        const transactionDate = new Date(targetYear, targetMonth, specificDate);
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+        if (transactionDate < oneYearAgo) {
+          throw new Error(
+            "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+          );
+        }
+
+        if (transactionDate > today) {
+          throw new Error("Tanggal transaksi tidak boleh di masa depan");
+        }
+      } else {
+        // Gunakan daysAgo
+        const days = daysAgo || 0;
+        const transactionDate = new Date();
+        transactionDate.setDate(transactionDate.getDate() - days);
+        formattedDate = transactionDate.toISOString().split("T")[0];
+
+        // Validasi tanggal
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+        if (transactionDate < oneYearAgo) {
+          throw new Error(
+            "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+          );
+        }
+      }
+
       const { error } = await supabase.from("transactions").insert({
         user_id: session.user.id,
         amount: message.parsedData.amount,
         type: message.parsedData.type,
         category: message.parsedData.category,
         description: message.parsedData.description,
-        transaction_date: new Date().toISOString().split("T")[0],
+        transaction_date: formattedDate,
       });
 
       if (error) throw error;
@@ -248,28 +362,79 @@ export default function ChatModal({ onClose }: Props) {
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       const today = new Date();
-      const transactionDate = new Date().toISOString().split("T")[0];
-      const selectedDate = new Date(transactionDate);
 
-      if (selectedDate < oneYearAgo) {
-        throw new Error(
-          "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
-        );
-      }
+      // Insert all transactions dengan tanggal masing-masing
+      const transactionsToInsert = message.multiParsedData.map((txn) => {
+        let formattedDate: string;
 
-      if (selectedDate > today) {
-        throw new Error("Tanggal transaksi tidak boleh di masa depan");
-      }
+        if (txn.specificDate) {
+          // Jika specificDate disebutkan - PERBAIKAN TIMEZONE ISSUE
+          const currentYear = today.getFullYear();
+          const currentMonth = today.getMonth(); // 0-indexed
+          const currentDay = today.getDate();
 
-      // Insert all transactions
-      const transactionsToInsert = message.multiParsedData.map((txn) => ({
-        user_id: session.user.id,
-        amount: txn.amount,
-        type: txn.type,
-        category: txn.category,
-        description: txn.description,
-        transaction_date: transactionDate,
-      }));
+          let targetMonth = currentMonth;
+          let targetYear = currentYear;
+
+          // Jika tanggal lebih besar dari hari ini, asumsikan bulan lalu
+          if (txn.specificDate > currentDay) {
+            targetMonth = currentMonth - 1;
+            if (targetMonth < 0) {
+              targetMonth = 11;
+              targetYear = currentYear - 1;
+            }
+          }
+
+          // PERBAIKAN: Format langsung tanpa Date object untuk menghindari timezone
+          const monthStr = String(targetMonth + 1).padStart(2, "0"); // +1 karena 0-indexed
+          const dateStr = String(txn.specificDate).padStart(2, "0");
+          formattedDate = `${targetYear}-${monthStr}-${dateStr}`;
+
+          // Validasi tanggal - gunakan Date untuk validasi
+          const transactionDate = new Date(
+            targetYear,
+            targetMonth,
+            txn.specificDate
+          );
+
+          // Validasi tanggal
+          if (transactionDate < oneYearAgo) {
+            throw new Error(
+              "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+            );
+          }
+
+          if (transactionDate > today) {
+            throw new Error("Tanggal transaksi tidak boleh di masa depan");
+          }
+        } else {
+          // Gunakan daysAgo
+          const daysAgo = txn.daysAgo || 0;
+          const transactionDate = new Date();
+          transactionDate.setDate(transactionDate.getDate() - daysAgo);
+          formattedDate = transactionDate.toISOString().split("T")[0];
+
+          // Validasi tanggal
+          if (transactionDate < oneYearAgo) {
+            throw new Error(
+              "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+            );
+          }
+
+          if (transactionDate > today) {
+            throw new Error("Tanggal transaksi tidak boleh di masa depan");
+          }
+        }
+
+        return {
+          user_id: session.user.id,
+          amount: txn.amount,
+          type: txn.type,
+          category: txn.category,
+          description: txn.description,
+          transaction_date: formattedDate,
+        };
+      });
 
       const { error } = await supabase
         .from("transactions")
@@ -452,7 +617,7 @@ export default function ChatModal({ onClose }: Props) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Bayar makan 50rb..."
+              placeholder="Tulis catatan uangmu disini..."
               disabled={loading}
               className="flex-1 px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:opacity-50"
             />
