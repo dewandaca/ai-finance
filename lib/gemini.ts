@@ -115,14 +115,22 @@ export const model = genAI.getGenerativeModel({
     responseMimeType: "application/json",
     responseSchema: schema,
   },
-  systemInstruction: `Anda adalah asisten keuangan AI yang profesional. Tugas Anda adalah mengkonversi input bahasa natural pengguna (dalam Bahasa Indonesia atau Inggris) menjadi format JSON yang mendeskripsikan transaksi keuangan.
+  systemInstruction: `Anda adalah asisten keuangan AI yang profesional dan TOLERAN terhadap typo/salah ketik. Tugas Anda adalah mengkonversi input bahasa natural pengguna (dalam Bahasa Indonesia atau Inggris) menjadi format JSON yang mendeskripsikan transaksi keuangan.
+
+PENTING: Anda HARUS TOLERAN terhadap typo dan variasi kata:
+- "bioskop" = "biosop" = "bioskob" = "bioskof" → Entertainment
+- "soccer" = "socr" = "socer" = "futsal" → Entertainment  
+- "nonton" = "noton" = "nnton" → Entertainment
+- "makan" = "mkn" = "mkan" → Food
+- "bensin" = "bensn" = "benzin" → Transport
+- dll. Gunakan context dan similarity untuk mengerti maksud user!
 
 Aturan:
 1. Tentukan tipe (income/pemasukan atau expense/pengeluaran) berdasarkan konteks
-2. Pilih kategori yang paling sesuai dari daftar yang tersedia
+2. Pilih kategori yang paling sesuai dari daftar yang tersedia (TOLERAN typo!)
 3. Ekstrak jumlah nominal (konversi mata uang jika diperlukan, k = 1000, juta = 1000000)
 4. Buat deskripsi yang ringkas dalam Bahasa Indonesia
-5. DETEKSI WAKTU TRANSAKSI (MASA LALU DAN MASA DEPAN):
+5. DETEKSI WAKTU TRANSAKSI - PENTING! MASA DEPAN HARUS NEGATIVE!:
    
    MASA LALU (positive daysAgo):
    - "hari ini" = 0
@@ -131,13 +139,13 @@ Aturan:
    - "seminggu lalu" = 7
    - "minggu lalu" = 7
    
-   MASA DEPAN (NEGATIVE daysAgo):
-   - "besok" = -1
-   - "lusa" = -2
-   - "besok lusa" = -2
-   - "3 hari lagi" = -3
-   - "minggu depan" = -7
-   - "seminggu lagi" = -7
+   MASA DEPAN (WAJIB NEGATIVE daysAgo!):
+   - "besok" = -1 (BUKAN 1!)
+   - "lusa" = -2 (BUKAN 2!)
+   - "besok lusa" = -2 (BUKAN 2!)
+   - "3 hari lagi" = -3 (BUKAN 3!)
+   - "minggu depan" = -7 (BUKAN 7!)
+   - "seminggu lagi" = -7 (BUKAN 7!)
    
    TANGGAL SPESIFIK (gunakan specificDate):
    - "tanggal 15" → specificDate: 15
@@ -148,27 +156,29 @@ Aturan:
    PRIORITAS:
    - Jika ada specificDate, abaikan daysAgo
    - Jika tidak disebutkan waktu sama sekali, set daysAgo = 0
+   - INGAT! Masa depan = NEGATIVE, masa lalu = POSITIVE!
    
 6. Respons HANYA dalam format JSON, tanpa teks tambahan
 
 Kategori yang tersedia:
-- Food (Makanan & Minuman)
-- Transport (Transportasi)
-- Bills (Tagihan & Utilitas)
-- Salary (Gaji & Penghasilan)
-- Shopping (Belanja)
-- Entertainment (Hiburan)
-- Transfer (Transfer Uang)
-- Other (Lainnya)
+- Food (Makanan & Minuman) - termasuk resto, cafe, warung, dll
+- Transport (Transportasi) - termasuk bensin, parkir, ojek, taksi
+- Bills (Tagihan & Utilitas) - listrik, air, internet, pulsa, kos, laundry
+- Salary (Gaji & Penghasilan) - gaji, bonus, THR
+- Shopping (Belanja) - baju, elektronik, barang
+- Entertainment (Hiburan) - bioskop, game, konser, olahraga (futsal/soccer/badminton), gym
+- Transfer (Transfer Uang) - kasih ke orang, kirim uang
+- Other (Lainnya) - yang tidak masuk kategori lain
 
 Contoh:
 - "Kasih adik 50 ribu" → expense, Transfer, 50000, "Transfer uang ke adik", daysAgo: 0
 - "Kemarin bayar kos 1,2 juta" → expense, Bills, 1200000, "Bayar kos", daysAgo: 1
-- "Besok bayar tagihan 100rb" → expense, Bills, 100000, "Bayar tagihan", daysAgo: -1
-- "Lusa mau bayar internet 300 ribu" → expense, Bills, 300000, "Bayar internet", daysAgo: -2
-- "Minggu depan terima gaji 5 juta" → income, Salary, 5000000, "Gaji bulanan", daysAgo: -7
+- "Besok bayar tagihan 100rb" → expense, Bills, 100000, "Bayar tagihan", daysAgo: -1 (NEGATIVE!)
+- "Lusa mau bayar internet 300 ribu" → expense, Bills, 300000, "Bayar internet", daysAgo: -2 (NEGATIVE!)
+- "Minggu depan terima gaji 5 juta" → income, Salary, 5000000, "Gaji bulanan", daysAgo: -7 (NEGATIVE!)
+- "besok nonton biosop 50rb" → expense, Entertainment, 50000, "Nonton bioskop", daysAgo: -1 (NEGATIVE!)
+- "lusa main socer 100k" → expense, Entertainment, 100000, "Main soccer", daysAgo: -2 (NEGATIVE!)
 - "Tanggal 15 isi bensin 50k" → expense, Transport, 50000, "Isi bensin", specificDate: 15
-- "Tgl 20 beli groceries 75 ribu" → expense, Food, 75000, "Belanja bahan makanan", specificDate: 20
 - "Makan di resto 250k" → expense, Food, 250000, "Makan di restoran", daysAgo: 0`,
 });
 
@@ -178,13 +188,19 @@ export const multiModel = genAI.getGenerativeModel({
     responseMimeType: "application/json",
     responseSchema: multiSchema,
   },
-  systemInstruction: `Anda adalah asisten keuangan AI yang profesional. Tugas Anda adalah mengkonversi input bahasa natural pengguna yang berisi MULTIPLE/BANYAK transaksi menjadi array of transactions dalam format JSON.
+  systemInstruction: `Anda adalah asisten keuangan AI yang profesional dan TOLERAN terhadap typo/salah ketik. Tugas Anda adalah mengkonversi input bahasa natural pengguna yang berisi MULTIPLE/BANYAK transaksi menjadi array of transactions dalam format JSON.
+
+PENTING: Anda HARUS TOLERAN terhadap typo dan variasi kata:
+- "bioskop" = "biosop" = "bioskob" = "bioskof" → Entertainment
+- "soccer" = "socr" = "socer" = "futsal" → Entertainment  
+- "nonton" = "noton" = "nnton" → Entertainment
+- dll. Gunakan context dan similarity untuk mengerti maksud user!
 
 Aturan:
 1. Deteksi SEMUA transaksi yang disebutkan dalam input
 2. Untuk setiap transaksi, tentukan: amount, type (income/expense), category, description, daysAgo/specificDate
 3. Ekstrak jumlah nominal (konversi: k=1000, juta=1000000, rb/ribu=1000)
-4. DETEKSI WAKTU (MASA LALU DAN MASA DEPAN):
+4. DETEKSI WAKTU - PENTING! MASA DEPAN HARUS NEGATIVE!:
    
    MASA LALU (positive daysAgo):
    - "hari ini" = 0
@@ -192,11 +208,11 @@ Aturan:
    - "2 hari lalu" = 2
    - "seminggu lalu" / "minggu lalu" = 7
    
-   MASA DEPAN (NEGATIVE daysAgo):
-   - "besok" = -1
-   - "lusa" / "besok lusa" = -2
-   - "3 hari lagi" = -3
-   - "minggu depan" / "seminggu lagi" = -7
+   MASA DEPAN (WAJIB NEGATIVE daysAgo!):
+   - "besok" = -1 (BUKAN 1!)
+   - "lusa" / "besok lusa" = -2 (BUKAN 2!)
+   - "3 hari lagi" = -3 (BUKAN 3!)
+   - "minggu depan" / "seminggu lagi" = -7 (BUKAN 7!)
    
    TANGGAL SPESIFIK (gunakan specificDate):
    - "tanggal 15" → specificDate: 15
@@ -205,19 +221,20 @@ Aturan:
    PRIORITAS:
    - Jika ada specificDate, abaikan daysAgo
    - Default daysAgo=0 jika tidak disebutkan
+   - INGAT! Masa depan = NEGATIVE, masa lalu = POSITIVE!
    
-5. Pilih kategori yang paling sesuai dari daftar yang tersedia
+5. Pilih kategori yang paling sesuai dari daftar yang tersedia (TOLERAN typo!)
 6. Respons HANYA dalam format JSON array, tanpa teks tambahan
 
 Kategori yang tersedia:
-- Food (Makanan & Minuman)
-- Transport (Transportasi)
-- Bills (Tagihan & Utilitas)
-- Salary (Gaji & Penghasilan)
-- Shopping (Belanja)
-- Entertainment (Hiburan)
-- Transfer (Transfer Uang)
-- Other (Lainnya)
+- Food (Makanan & Minuman) - termasuk resto, cafe, warung
+- Transport (Transportasi) - bensin, parkir, ojek, taksi
+- Bills (Tagihan & Utilitas) - listrik, air, internet, pulsa, kos, laundry
+- Salary (Gaji & Penghasilan) - gaji, bonus, THR
+- Shopping (Belanja) - baju, elektronik, barang
+- Entertainment (Hiburan) - bioskop, game, konser, olahraga (futsal/soccer/badminton), gym
+- Transfer (Transfer Uang) - kasih ke orang, kirim uang
+- Other (Lainnya) - yang tidak masuk kategori lain
 
 Contoh Input Multi-Transaksi:
 "Tadi bayar makan 50rb, terus isi bensin 100rb, sama beli pulsa 25rb"
@@ -227,7 +244,10 @@ Contoh Input Multi-Transaksi:
 → 2 transaksi: Food (200000, specificDate:15), Entertainment (50000, specificDate:15)
 
 "Besok bayar listrik 150rb dan lusa bayar internet 300rb"
-→ 2 transaksi: Bills (150000, daysAgo:-1), Bills (300000, daysAgo:-2)`,
+→ 2 transaksi: Bills (150000, daysAgo:-1), Bills (300000, daysAgo:-2) (NEGATIVE!)
+
+"besok nonton biosop 50k dan lusa main socer 100k"
+→ 2 transaksi: Entertainment (50000, daysAgo:-1), Entertainment (100000, daysAgo:-2) (NEGATIVE!)`,
 });
 
 export type ParsedTransaction = {
@@ -398,6 +418,7 @@ export function detectCasualChat(text: string): string | null {
     "gimana caranya",
     "gmna cara",
     "gimana cara",
+    "jelasin",
   ];
   if (aboutAppPatterns.some((p) => lowerText.includes(p))) {
     const responses = [
@@ -501,10 +522,11 @@ export function formatTransactionTime(
 }
 
 // Fungsi untuk mendeteksi apakah input adalah transaksi yang valid
+// LEBIH TOLERAN - menggunakan fuzzy matching dan similarity
 export function isValidTransactionInput(text: string): boolean {
   const lowerText = text.toLowerCase();
 
-  // Kata-kata kunci yang mengindikasikan transaksi
+  // Kata-kata kunci yang mengindikasikan transaksi (EXPANDED)
   const transactionKeywords = [
     "bayar",
     "beli",
@@ -520,7 +542,7 @@ export function isValidTransactionInput(text: string): boolean {
     "bonus",
     "jual",
     "makan",
-    "beli",
+    "mkn",
     "shopping",
     "spent",
     "paid",
@@ -531,17 +553,108 @@ export function isValidTransactionInput(text: string): boolean {
     "pemasukan",
     "keluar",
     "masuk",
+    // Entertainment indicators
+    "nonton",
+    "noton",
+    "bioskop",
+    "biosop",
+    "bioskob",
+    "bioskof",
+    "movie",
+    "film",
+    "main",
+    "soccer",
+    "socer",
+    "socr",
+    "futsal",
+    "badminton",
+    "gym",
+    "fitness",
+    "olahraga",
+    "game",
+    "konser",
+    "concert",
+    // Transport
+    "bensin",
+    "bensn",
+    "benzin",
+    "parkir",
+    "ojek",
+    "taksi",
+    "taxi",
+    "grab",
+    "gojek",
+    // Bills
+    "listrik",
+    "internet",
+    "pulsa",
+    "tagihan",
+    "kos",
+    "kontrakan",
+    "wifi",
+    "token",
+    // Food
+    "kopi",
+    "minum",
+    "cafe",
+    "resto",
+    "restoran",
+    "warung",
+    "jajan",
+    // Shopping
+    "baju",
+    "sepatu",
+    "elektronik",
+    "hp",
+    "laptop",
   ];
 
   // Pola angka (untuk nominal)
   const hasNumber = /\d/.test(text);
 
-  // Cek apakah ada kata kunci transaksi DAN ada angka
-  const hasTransactionKeyword = transactionKeywords.some((keyword) =>
+  // Cek apakah ada kata kunci transaksi dengan FUZZY MATCHING
+  const hasTransactionKeyword = transactionKeywords.some((keyword) => {
+    // Exact match
+    if (lowerText.includes(keyword)) return true;
+
+    // Fuzzy match - toleransi 1-2 karakter berbeda untuk kata > 4 huruf
+    if (keyword.length > 4) {
+      // Cek jika kata mirip (simple Levenshtein-like check)
+      const words = lowerText.split(/\s+/);
+      for (const word of words) {
+        if (Math.abs(word.length - keyword.length) <= 2) {
+          // Cek similarity sederhana
+          let matchCount = 0;
+          const minLen = Math.min(word.length, keyword.length);
+          for (let i = 0; i < minLen; i++) {
+            if (word[i] === keyword[i]) matchCount++;
+          }
+          // Jika 70% karakter cocok, anggap match
+          if (matchCount / keyword.length >= 0.7) return true;
+        }
+      }
+    }
+    return false;
+  });
+
+  // Jika ada angka DAN kata kunci, atau jika ada angka dengan kata waktu (besok, lusa, etc)
+  const timeKeywords = [
+    "besok",
+    "lusa",
+    "kemarin",
+    "hari ini",
+    "minggu depan",
+    "tanggal",
+    "tgl",
+  ];
+  const hasTimeKeyword = timeKeywords.some((keyword) =>
     lowerText.includes(keyword)
   );
 
-  return hasTransactionKeyword && hasNumber;
+  // Return true jika:
+  // 1. Ada transaction keyword DAN ada angka, ATAU
+  // 2. Ada time keyword DAN ada angka (lebih permisif untuk future transactions)
+  return (hasTransactionKeyword && hasNumber) || (hasTimeKeyword && hasNumber);
 }
 
 export async function parseTransactionText(

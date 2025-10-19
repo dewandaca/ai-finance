@@ -747,7 +747,7 @@ export default function DashboardPage() {
                   key={transaction.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center justify-between p-3 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all group hover:shadow-md"
+                  className="flex items-center justify-between p-3 md:p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all group hover:shadow-md gap-3"
                 >
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
                     <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 bg-slate-100 dark:bg-slate-600 rounded-xl flex items-center justify-center text-xl md:text-2xl">
@@ -759,7 +759,7 @@ export default function DashboardPage() {
                       <p className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
                         {transaction.description || transaction.category}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                         <span>
                           {format(
                             new Date(transaction.transaction_date),
@@ -781,9 +781,9 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 flex-shrink-0">
+                  <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                     <div
-                      className={`font-bold text-sm md:text-base ${
+                      className={`font-bold text-sm md:text-base text-right ${
                         transaction.type === "income"
                           ? "text-green-600 dark:text-green-400"
                           : "text-red-600 dark:text-red-400"

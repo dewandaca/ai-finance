@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   transaction_date DATE NOT NULL,
-  amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  amount NUMERIC(15, 2) NOT NULL CHECK (amount > 0),
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
   category TEXT NOT NULL,
   description TEXT,
