@@ -41,7 +41,7 @@ const schema = {
     daysAgo: {
       type: SchemaType.NUMBER,
       description:
-        "Number of days ago the transaction occurred (0 = today, 1 = yesterday, etc). Defaults to 0 if not specified.",
+        "Number of days in the PAST the transaction occurred (positive number for past: 0 = today, 1 = yesterday, etc). Use NEGATIVE number for future dates (-1 = tomorrow, -2 = day after tomorrow). Can also be -7 for 'minggu depan' (next week). Defaults to 0 if not specified.",
       nullable: true,
     },
     specificDate: {
@@ -92,7 +92,7 @@ const multiSchema = {
           daysAgo: {
             type: SchemaType.NUMBER,
             description:
-              "Number of days ago the transaction occurred (0 = today, 1 = yesterday, etc). Defaults to 0 if not specified.",
+              "Number of days in the PAST the transaction occurred (positive number for past: 0 = today, 1 = yesterday, etc). Use NEGATIVE number for future dates (-1 = tomorrow, -2 = day after tomorrow). Can also be -7 for 'minggu depan' (next week). Defaults to 0 if not specified.",
             nullable: true,
           },
           specificDate: {
@@ -122,11 +122,33 @@ Aturan:
 2. Pilih kategori yang paling sesuai dari daftar yang tersedia
 3. Ekstrak jumlah nominal (konversi mata uang jika diperlukan, k = 1000, juta = 1000000)
 4. Buat deskripsi yang ringkas dalam Bahasa Indonesia
-5. DETEKSI WAKTU TRANSAKSI:
-   - Relatif: "kemarin"=1, "2 hari lalu"=2, "seminggu lalu"=7, dsb → set daysAgo
-   - Tanggal Spesifik: "tanggal 15", "tgl 20", "15 oktober", "pada tanggal 5" → set specificDate (hanya angka tanggalnya)
+5. DETEKSI WAKTU TRANSAKSI (MASA LALU DAN MASA DEPAN):
+   
+   MASA LALU (positive daysAgo):
+   - "hari ini" = 0
+   - "kemarin" = 1
+   - "2 hari lalu" = 2
+   - "seminggu lalu" = 7
+   - "minggu lalu" = 7
+   
+   MASA DEPAN (NEGATIVE daysAgo):
+   - "besok" = -1
+   - "lusa" = -2
+   - "besok lusa" = -2
+   - "3 hari lagi" = -3
+   - "minggu depan" = -7
+   - "seminggu lagi" = -7
+   
+   TANGGAL SPESIFIK (gunakan specificDate):
+   - "tanggal 15" → specificDate: 15
+   - "tgl 20" → specificDate: 20
+   - "15 oktober" → specificDate: 15
+   - "pada tanggal 5" → specificDate: 5
+   
+   PRIORITAS:
    - Jika ada specificDate, abaikan daysAgo
    - Jika tidak disebutkan waktu sama sekali, set daysAgo = 0
+   
 6. Respons HANYA dalam format JSON, tanpa teks tambahan
 
 Kategori yang tersedia:
@@ -142,9 +164,11 @@ Kategori yang tersedia:
 Contoh:
 - "Kasih adik 50 ribu" → expense, Transfer, 50000, "Transfer uang ke adik", daysAgo: 0
 - "Kemarin bayar kos 1,2 juta" → expense, Bills, 1200000, "Bayar kos", daysAgo: 1
+- "Besok bayar tagihan 100rb" → expense, Bills, 100000, "Bayar tagihan", daysAgo: -1
+- "Lusa mau bayar internet 300 ribu" → expense, Bills, 300000, "Bayar internet", daysAgo: -2
+- "Minggu depan terima gaji 5 juta" → income, Salary, 5000000, "Gaji bulanan", daysAgo: -7
 - "Tanggal 15 isi bensin 50k" → expense, Transport, 50000, "Isi bensin", specificDate: 15
 - "Tgl 20 beli groceries 75 ribu" → expense, Food, 75000, "Belanja bahan makanan", specificDate: 20
-- "Pada tanggal 5 terima gaji 5 juta" → income, Salary, 5000000, "Gaji bulanan", specificDate: 5
 - "Makan di resto 250k" → expense, Food, 250000, "Makan di restoran", daysAgo: 0`,
 });
 
@@ -160,11 +184,28 @@ Aturan:
 1. Deteksi SEMUA transaksi yang disebutkan dalam input
 2. Untuk setiap transaksi, tentukan: amount, type (income/expense), category, description, daysAgo/specificDate
 3. Ekstrak jumlah nominal (konversi: k=1000, juta=1000000, rb/ribu=1000)
-4. DETEKSI WAKTU:
-   - Relatif: "kemarin"=1, "2 hari lalu"=2, "seminggu lalu"=7 → set daysAgo
-   - Tanggal Spesifik: "tanggal 15", "tgl 20" → set specificDate (hanya angka tanggalnya)
+4. DETEKSI WAKTU (MASA LALU DAN MASA DEPAN):
+   
+   MASA LALU (positive daysAgo):
+   - "hari ini" = 0
+   - "kemarin" = 1
+   - "2 hari lalu" = 2
+   - "seminggu lalu" / "minggu lalu" = 7
+   
+   MASA DEPAN (NEGATIVE daysAgo):
+   - "besok" = -1
+   - "lusa" / "besok lusa" = -2
+   - "3 hari lagi" = -3
+   - "minggu depan" / "seminggu lagi" = -7
+   
+   TANGGAL SPESIFIK (gunakan specificDate):
+   - "tanggal 15" → specificDate: 15
+   - "tgl 20" → specificDate: 20
+   
+   PRIORITAS:
    - Jika ada specificDate, abaikan daysAgo
    - Default daysAgo=0 jika tidak disebutkan
+   
 5. Pilih kategori yang paling sesuai dari daftar yang tersedia
 6. Respons HANYA dalam format JSON array, tanpa teks tambahan
 
@@ -183,7 +224,10 @@ Contoh Input Multi-Transaksi:
 → 3 transaksi: Food (50000, daysAgo:0), Transport (100000, daysAgo:0), Bills (25000, daysAgo:0)
 
 "Tanggal 15 belanja groceries 200 ribu dan bayar netflix 50 ribu"
-→ 2 transaksi: Food (200000, specificDate:15), Entertainment (50000, specificDate:15)`,
+→ 2 transaksi: Food (200000, specificDate:15), Entertainment (50000, specificDate:15)
+
+"Besok bayar listrik 150rb dan lusa bayar internet 300rb"
+→ 2 transaksi: Bills (150000, daysAgo:-1), Bills (300000, daysAgo:-2)`,
 });
 
 export type ParsedTransaction = {
@@ -214,6 +258,9 @@ export function detectMultipleTransactions(text: string): boolean {
     " plus ",
     ", ",
     " serta ",
+    " trus ",
+    " abis itu ",
+    " setelah ",
   ];
 
   // Kata-kata transaksi
@@ -292,7 +339,7 @@ export function detectCasualChat(text: string): string | null {
     "thanks",
     "thank you",
     "thx",
-    "mksh"
+    "mksh",
   ];
   if (thanksPatterns.some((p) => lowerText.includes(p))) {
     const responses = [
@@ -351,8 +398,6 @@ export function detectCasualChat(text: string): string | null {
     "gimana caranya",
     "gmna cara",
     "gimana cara",
-
-    
   ];
   if (aboutAppPatterns.some((p) => lowerText.includes(p))) {
     const responses = [
@@ -375,7 +420,7 @@ export function calculateTransactionDate(daysAgo: number = 0): string {
   return date.toISOString().split("T")[0];
 }
 
-// Fungsi untuk menghitung tanggal berdasarkan specificDate atau daysAgo
+// Fungsi untuk menghitung tanggal berdasarkan specificDate atau daysAgo (support future dates)
 export function getTransactionDate(
   daysAgo?: number,
   specificDate?: number
@@ -407,14 +452,15 @@ export function getTransactionDate(
     const dateStr = String(specificDate).padStart(2, "0");
     return `${targetYear}-${monthStr}-${dateStr}`;
   } else {
-    // Gunakan daysAgo (default 0)
+    // Gunakan daysAgo (support negative for future dates)
+    // Positive = past, Negative = future
     const date = new Date();
-    date.setDate(date.getDate() - (daysAgo || 0));
+    date.setDate(date.getDate() - (daysAgo || 0)); // Negative daysAgo akan menambah hari
     return date.toISOString().split("T")[0];
   }
 }
 
-// Fungsi untuk format tanggal dalam bahasa Indonesia
+// Fungsi untuk format tanggal dalam bahasa Indonesia (support future dates)
 export function formatTransactionTime(
   daysAgo?: number,
   specificDate?: number
@@ -424,14 +470,33 @@ export function formatTransactionTime(
   }
 
   const days = daysAgo || 0;
-  if (days === 0) {
+
+  // Masa lalu (positive)
+  if (days > 0) {
+    if (days === 1) {
+      return "kemarin";
+    } else if (days === 7) {
+      return "seminggu lalu";
+    } else {
+      return `${days} hari lalu`;
+    }
+  }
+  // Masa depan (negative)
+  else if (days < 0) {
+    const absDays = Math.abs(days);
+    if (absDays === 1) {
+      return "besok";
+    } else if (absDays === 2) {
+      return "lusa";
+    } else if (absDays === 7) {
+      return "minggu depan";
+    } else {
+      return `${absDays} hari lagi`;
+    }
+  }
+  // Hari ini (0)
+  else {
     return "hari ini";
-  } else if (days === 1) {
-    return "kemarin";
-  } else if (days === 7) {
-    return "seminggu lalu";
-  } else {
-    return `${days} hari lalu`;
   }
 }
 

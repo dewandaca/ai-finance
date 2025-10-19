@@ -140,7 +140,19 @@ export default function RecommendationModal({ onClose, userId }: Props) {
               >
                 {message.role === "recommendation" ? (
                   <div className="w-full bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900 dark:to-purple-900 rounded-2xl p-4 border-2 border-blue-200 dark:border-purple-500">
-                    <div className="prose prose-blue dark:prose-invert max-w-none prose-sm text-slate-800 dark:text-slate-100">
+                    <div
+                      className="prose prose-blue dark:prose-invert max-w-none prose-sm text-slate-800 dark:text-slate-100 
+                      prose-headings:font-bold prose-headings:mb-3 prose-headings:mt-4
+                      prose-h1:text-2xl prose-h1:mb-4 prose-h1:mt-0
+                      prose-h2:text-xl prose-h2:mb-3 prose-h2:mt-5
+                      prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4
+                      prose-p:mb-3 prose-p:leading-relaxed
+                      prose-ul:my-3 prose-ul:space-y-2
+                      prose-li:my-1 prose-li:leading-relaxed
+                      prose-hr:my-5 prose-hr:border-blue-200 dark:prose-hr:border-purple-600
+                      prose-strong:font-semibold prose-strong:text-blue-700 dark:prose-strong:text-blue-300
+                      [&>*:first-child]:mt-0"
+                    >
                       <ReactMarkdown>{message.content}</ReactMarkdown>
                     </div>
                     <div className="mt-4 pt-4 border-t border-blue-200 dark:border-purple-600 flex gap-2">

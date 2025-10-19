@@ -18,7 +18,7 @@ export default function ManualTransactionModal({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Calculate min and max date (1 year ago to today)
+  // Calculate min and max date (1 year ago to 1 year ahead)
   const getMinDate = () => {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -26,7 +26,9 @@ export default function ManualTransactionModal({ onClose }: Props) {
   };
 
   const getMaxDate = () => {
-    return new Date().toISOString().split("T")[0];
+    const oneYearAhead = new Date();
+    oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
+    return oneYearAhead.toISOString().split("T")[0];
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,11 +37,12 @@ export default function ManualTransactionModal({ onClose }: Props) {
     setError("");
 
     try {
-      // Validate date is within 1 year
+      // Validate date is within range (1 year ago to 1 year ahead)
       const selectedDate = new Date(date);
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      const today = new Date();
+      const oneYearAhead = new Date();
+      oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
 
       if (selectedDate < oneYearAgo) {
         throw new Error(
@@ -47,8 +50,10 @@ export default function ManualTransactionModal({ onClose }: Props) {
         );
       }
 
-      if (selectedDate > today) {
-        throw new Error("Tanggal transaksi tidak boleh di masa depan");
+      if (selectedDate > oneYearAhead) {
+        throw new Error(
+          "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun ke depan"
+        );
       }
 
       const {
@@ -234,7 +239,8 @@ export default function ManualTransactionModal({ onClose }: Props) {
                 className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               />
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                ⚠️ Hanya bisa mencatat transaksi dalam 1 tahun terakhir
+                ⚠️ Bisa mencatat transaksi dari 1 tahun lalu sampai 1 tahun ke
+                depan
               </p>
             </div>
 

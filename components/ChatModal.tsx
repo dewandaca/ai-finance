@@ -37,7 +37,7 @@ export default function ChatModal({ onClose }: Props) {
       id: "1",
       role: "assistant",
       content:
-        "Halo! Saya asisten keuangan AI Anda. Ceritakan transaksi Anda dengan bahasa natural, misalnya 'Tanggal 15 bayar makan 50 ribu', 'Kemarin terima gaji 5 juta', atau 'Tadi isi bensin 100rb'. Saya akan membantu mencatatnya! 💰",
+        "Halo! Saya asisten keuangan AI Anda. Ceritakan transaksi Anda dengan bahasa natural, misalnya:\n\n🔸 'Bayar makan 50 ribu'\n🔸 'Kemarin terima gaji 5 juta'\n🔸 'Besok bayar tagihan 100rb'\n🔸 'Tanggal 15 belanja groceries 200rb'\n\nBisa juga untuk transaksi masa depan seperti 'lusa bayar kos' atau 'minggu depan terima bonus'! 💰",
     },
   ]);
   const [input, setInput] = useState("");
@@ -116,14 +116,29 @@ export default function ChatModal({ onClose }: Props) {
               timeInfo = `tanggal ${txn.specificDate}`;
             } else {
               const daysAgo = txn.daysAgo || 0;
-              if (daysAgo === 0) {
-                timeInfo = "hari ini";
-              } else if (daysAgo === 1) {
-                timeInfo = "kemarin";
-              } else if (daysAgo === 7) {
-                timeInfo = "seminggu lalu";
+              if (daysAgo > 0) {
+                // Masa lalu
+                if (daysAgo === 1) {
+                  timeInfo = "kemarin";
+                } else if (daysAgo === 7) {
+                  timeInfo = "seminggu lalu";
+                } else {
+                  timeInfo = `${daysAgo} hari lalu`;
+                }
+              } else if (daysAgo < 0) {
+                // Masa depan
+                const absDays = Math.abs(daysAgo);
+                if (absDays === 1) {
+                  timeInfo = "besok";
+                } else if (absDays === 2) {
+                  timeInfo = "lusa";
+                } else if (absDays === 7) {
+                  timeInfo = "minggu depan";
+                } else {
+                  timeInfo = `${absDays} hari lagi`;
+                }
               } else {
-                timeInfo = `${daysAgo} hari lalu`;
+                timeInfo = "hari ini";
               }
             }
 
@@ -153,20 +168,36 @@ export default function ChatModal({ onClose }: Props) {
       // Add confirmation message for single transaction
       const daysAgo = data.daysAgo;
       const specificDate = data.specificDate;
-      let timeInfo = "";
 
+      let timeInfo = "";
       if (specificDate) {
         timeInfo = `tanggal ${specificDate}`;
       } else {
         const days = daysAgo || 0;
-        if (days === 0) {
-          timeInfo = "hari ini";
-        } else if (days === 1) {
-          timeInfo = "kemarin";
-        } else if (days === 7) {
-          timeInfo = "seminggu lalu";
+        if (days > 0) {
+          // Masa lalu
+          if (days === 1) {
+            timeInfo = "kemarin";
+          } else if (days === 7) {
+            timeInfo = "seminggu lalu";
+          } else {
+            timeInfo = `${days} hari lalu`;
+          }
+        } else if (days < 0) {
+          // Masa depan
+          const absDays = Math.abs(days);
+          if (absDays === 1) {
+            timeInfo = "besok";
+          } else if (absDays === 2) {
+            timeInfo = "lusa";
+          } else if (absDays === 7) {
+            timeInfo = "minggu depan";
+          } else {
+            timeInfo = `${absDays} hari lagi`;
+          }
         } else {
-          timeInfo = `${days} hari lalu`;
+          // Hari ini
+          timeInfo = "hari ini";
         }
       }
 
@@ -259,6 +290,8 @@ export default function ChatModal({ onClose }: Props) {
         const transactionDate = new Date(targetYear, targetMonth, specificDate);
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const oneYearAhead = new Date();
+        oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
 
         if (transactionDate < oneYearAgo) {
           throw new Error(
@@ -266,23 +299,33 @@ export default function ChatModal({ onClose }: Props) {
           );
         }
 
-        if (transactionDate > today) {
-          throw new Error("Tanggal transaksi tidak boleh di masa depan");
+        if (transactionDate > oneYearAhead) {
+          throw new Error(
+            "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun ke depan"
+          );
         }
       } else {
-        // Gunakan daysAgo
+        // Gunakan daysAgo (support negative for future dates)
         const days = daysAgo || 0;
         const transactionDate = new Date();
-        transactionDate.setDate(transactionDate.getDate() - days);
+        transactionDate.setDate(transactionDate.getDate() - days); // Negative days akan menambah hari
         formattedDate = transactionDate.toISOString().split("T")[0];
 
         // Validasi tanggal
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const oneYearAhead = new Date();
+        oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
 
         if (transactionDate < oneYearAgo) {
           throw new Error(
             "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun yang lalu"
+          );
+        }
+
+        if (transactionDate > oneYearAhead) {
+          throw new Error(
+            "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun ke depan"
           );
         }
       }
@@ -361,6 +404,8 @@ export default function ChatModal({ onClose }: Props) {
       // Validasi tanggal untuk semua transaksi
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const oneYearAhead = new Date();
+      oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
       const today = new Date();
 
       // Insert all transactions dengan tanggal masing-masing
@@ -404,14 +449,16 @@ export default function ChatModal({ onClose }: Props) {
             );
           }
 
-          if (transactionDate > today) {
-            throw new Error("Tanggal transaksi tidak boleh di masa depan");
+          if (transactionDate > oneYearAhead) {
+            throw new Error(
+              "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun ke depan"
+            );
           }
         } else {
-          // Gunakan daysAgo
+          // Gunakan daysAgo (support negative for future dates)
           const daysAgo = txn.daysAgo || 0;
           const transactionDate = new Date();
-          transactionDate.setDate(transactionDate.getDate() - daysAgo);
+          transactionDate.setDate(transactionDate.getDate() - daysAgo); // Negative akan menambah hari
           formattedDate = transactionDate.toISOString().split("T")[0];
 
           // Validasi tanggal
@@ -421,8 +468,10 @@ export default function ChatModal({ onClose }: Props) {
             );
           }
 
-          if (transactionDate > today) {
-            throw new Error("Tanggal transaksi tidak boleh di masa depan");
+          if (transactionDate > oneYearAhead) {
+            throw new Error(
+              "Transaksi tidak dapat dicatat untuk tanggal lebih dari 1 tahun ke depan"
+            );
           }
         }
 
